@@ -1,0 +1,221 @@
+#!/bin/sh
+#
+# * 02 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - Modified from the original Mandrake script to only do the
+#   bare minimum (i.e. no removable media)
+# - Original credits: (c) 2001, 2002 - MandrakeSoft,
+#   David BAUDENS <baudens@mandrakesoft.com> Copyright under GPL version 2
+#
+# Basic script for KDE Desktop configuration
+
+if [ ! -d $HOME/Desktop ]; then
+        mkdir -p $HOME/Desktop
+fi
+
+if [ ! -e $HOME/Desktop/.directory ]; then
+        cp -f /usr/share/mdk/kde/directory-desktop $HOME/Desktop/.directory
+fi
+
+### we don't want this since we already have all links on our desktop
+# Removable media
+#if [ ! -e ~/Desktop/.md5sumetcfstab ] || [ $(md5sum -c ~/Desktop/.md5sumetcfstab | awk '{print $2}') != OK ]; then
+#	   # CD-ROM
+#	   for i in $(grep cdrom /etc/fstab | grep -v ^# | awk '{print $1 $2 $3 $4}'); do
+#		   if [ $(echo $i | grep supermount) ] ; then
+#			   supermount=1
+#			   dev=$(echo $i | awk -F, '{print $1}' | sed -e 's/.*dev=//')
+#			   i=$(echo $i | sed -e 's/supermount.*//')
+#		   else supermount=0
+#			   i=$(echo $i | sed -e 's/adfs.*//;s/affs.*//;s/auto.*//;s/coherent.*//;s/cramfs.*//;s/efs.*//;s/ext.*//;s/ext2.*//;s/ext3.*//;s/hfs.*//;s/hpfs.*//;s/iso9660.*//;s/jfs.*//;s/minix.*//;s/msdos.*//;s/ncpfs.*//;s/ntfs.*//;s/qnx4.*//;s/reiserfs.*//;s/romfs.*//;s/sysv.*//;s/tmpfs.*//;s/udf.*//;s/ufs.*//;s/umsdos.*//;s/vfat.*//;s/xenix.*//;s/xfs.*//;s/xiafs.*//')
+#			   dev=$(echo $i | sed -e 's/\/mnt.*//')
+#		   fi
+#
+#		   template="/usr/share/templates/.source/CDROM-Device.desktop"
+#		   mountpoint=$(echo $i | sed -e 's/.*\/mnt/\/mnt/')
+#		   name=$(echo $i | sed -e 's/.*cdrom/cd-rom/' | tr '[a-z]' '[A-Z]')
+#		   output="$HOME/Desktop/Removable media/$name"
+#		   if [ $supermount = 0 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   perl -pi -e "s|MountPoint=|MountPoint=$mountpoint|;s|Dev=|Dev=$dev|;s|Icon=.*|Icon=cd-mdk.png|" < $template > $output
+#			   touch $HOME/Desktop/.$name
+#		   elif [ $supermount = 1 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   perl -pi -e "s|^[F;M;R;T;U].*\n||;s|Dev=\n|Dev=$dev\nType=Link\nURL=$mountpoint\n|;s|Icon=.*\n|Icon=cd-mdk.png\n|" < $template > $output
+#			   touch $HOME/Desktop/Removable\ media/.$name
+#		   fi
+#
+#	   done
+#
+#
+#	   # Floppy
+#	   for i in $(grep floppy /etc/fstab | grep -v ^# | awk '{print $1 $2 $3 $4}'); do
+#		   if [ $(echo $i | grep supermount) ] ; then
+#			   supermount=1
+#			   dev=$(echo $i | awk -F, '{print $1}' | sed -e 's/.*dev=//')
+#			   i=$(echo $i | sed -e 's/supermount.*//')
+#		   else supermount=0
+#			   i=$(echo $i | sed -e 's/adfs.*//;s/affs.*//;s/auto.*//;s/coherent.*//;s/cramfs.*//;s/efs.*//;s/ext.*//;s/ext2.*//;s/ext3.*//;s/hfs.*//;s/hpfs.*//;s/iso9660.*//;s/jfs.*//;s/minix.*//;s/msdos.*//;s/ncpfs.*//;s/ntfs.*//;s/qnx4.*//;s/reiserfs.*//;s/romfs.*//;s/sysv.*//;s/tmpfs.*//;s/udf.*//;s/ufs.*//;s/umsdos.*//;s/vfat.*//;s/xenix.*//;s/xfs.*//;s/xiafs.*//')
+#			   dev=$(echo $i | sed -e 's/\/mnt.*//')
+#		   fi
+#
+#		   template="/usr/share/templates/.source/Floppy.desktop"
+#		   mountpoint=$(echo $i | sed -e 's/.*\/mnt/\/mnt/')
+#		   name=$(echo $i | sed -e 's/.*floppy/Floppy/')
+#		   output="$HOME/Desktop/Removable media/$name"
+#
+#		   if [ $supermount = 0 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   perl -pi -e "s|MountPoint=|MountPoint=$mountpoint|;s|Dev=|Dev=$dev|;s|Icon=.*|Icon=floppy-mdk.png|" < $template > $output
+#			   touch $HOME/Desktop/Removable\ media/.$name
+#		   elif [ $supermount = 1 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   perl -pi -e "s|^[F;M;R;T;U].*\n||;s|Dev=\n|Type=Link\nURL=$mountpoint\n|;s|Icon=.*\n|Icon=floppy-mdk.png\n|" < $template > $output
+#			   touch $HOME/Desktop/Removable\ media/.$name
+#		   fi
+#
+#	   done
+#
+#
+#	   # Zip
+#	   for i in $(grep zip /etc/fstab | grep -v ^# | awk '{print $1 $2 $3 $4}'); do
+#		   if [ $(echo $i | grep supermount) ] ; then
+#			   supermount=1
+#			   template="/usr/share/mdk/kde/Zip.desktop"
+#			   dev=$(echo $i | awk -F, '{print $1}' | sed -e 's/.*dev=//')
+#			   i=$(echo $i | sed -e 's/supermount.*//')
+#		   else supermount=0
+#			   template="/usr/share/mdk/kde/Zip2.desktop"
+#			   i=$(echo $i | sed -e 's/adfs.*//;s/affs.*//;s/auto.*//;s/coherent.*//;s/cramfs.*//;s/efs.*//;s/ext.*//;s/ext2.*//;s/ext3.*//;s/hfs.*//;s/hpfs.*//;s/iso9660.*//;s/jfs.*//;s/minix.*//;s/msdos.*//;s/ncpfs.*//;s/ntfs.*//;s/qnx4.*//;s/reiserfs.*//;s/romfs.*//;s/sysv.*//;s/tmpfs.*//;s/udf.*//;s/ufs.*//;s/umsdos.*//;s/vfat.*//;s/xenix.*//;s/xfs.*//;s/xiafs.*//')
+#			   dev=$(echo $i | sed -e 's/\/mnt.*//')
+#		   fi
+#
+#		   mountpoint=$(echo $i | sed -e 's/.*\/mnt/\/mnt/')
+#		   name=$(echo $i | sed -e 's/.*zip/Zip/')
+#		   output="$HOME/Desktop/Removable media/$name"
+#
+#		   if [ $supermount = 0 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   perl -pi -e "s|MountPoint=.*|MountPoint=$mountpoint|;s|Dev=.*|Dev=$dev|;s|Icon=.*|Icon=zip-mdk.png|" < $template > $output
+#			   touch $HOME/Desktop/Removable\ media/.$name
+#		   elif [ $supermount = 1 ] && [ ! -e $HOME/Desktop/Removable\ media/.$name ]; then
+#			   if [ ! -d $HOME/Desktop/Removable\ media/ ]; then
+#				   mkdir -p $HOME/Desktop/Removable\ media/
+#				   cp /usr/share/mdk/kde/removable_media.directory $HOME/Desktop/Removable\ media/.directory
+#			   fi
+#			   #perl -pi -e "s|^[F;M;R;T;U].*\n||;s|Dev=\n|Type=Link\nURL=$mountpoint\n|" < $template > $output
+#			   perl -pi -e "s|^URL=.*\n|URL=$mountpoint\n|;s|Icon=.*\n|Icon=zip-mdk.png\n|" < $template > $output
+#			   touch $HOME/Desktop/Removable\ media/.$name
+#		   fi
+#	   done
+#
+#fi
+
+if [ ! -e $HOME/Desktop/.md5sumetcfstab ]; then
+	md5sum /etc/fstab > $HOME/Desktop/.md5sumetcfstab
+fi
+
+# CDCOM
+#if [ ! -e $HOME/Desktop/.cdcom ] && [ -r /usr/share/mdk/cdcom/index.html ]; then
+#	cp -f /usr/share/mdk/cdcom/cdcom-kde.desktop $HOME/Desktop/cdcom.desktop
+#	touch $HOME/Desktop/.cdcom
+#fi
+
+# Control Center
+#if [ ! -e $HOME/Desktop/.ccenter ] && [ -x /usr/X11R6/bin/DrakConf ]; then
+#	cp -f /usr/share/mdk/kde/Mandrake\ Control\ Center.desktop $HOME/Desktop/
+#	touch $HOME/Desktop/.ccenter
+#fi
+
+
+# Home directory
+#if [ ! -e $HOME/Desktop/.home ]; then
+#	cp -f /usr/share/apps/kdesktop/DesktopLinks/Home.desktop $HOME/Desktop/
+#	touch $HOME/Desktop/.home
+#fi
+
+
+# TODO: Use a more explicit name
+# Internet icon
+#if [ ! -e $HOME/Desktop/.internet ] && [ -x /usr/sbin/draknet ]; then
+#	cp -f /usr/share/mdk/kde/Connection-to-Internet.desktop $HOME/Desktop/internet.desktop
+#	touch $HOME/Desktop/.internet
+#fi
+
+
+# TODO: Rename as 'Mandrake documentation'
+# Mandrake Documentation
+#langg=$(cat /etc/sysconfig/i18n | grep ^LANG= | sed -e 's/LANG=//;s/de.*/de/;s/en.*/en/;s/es.*/es/;s/fr.*/fr/;s/it/it/')
+#if [ ! -e $HOME/Desktop/.doc ]; then
+#	if [ $langg = de ] && [ -r /usr/share/doc/mandrake/de/index.html ]; then
+#                cp -f /usr/share/mdk/kde/Documentation-de.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        elif [ $langg = es ] && [ -r /usr/share/doc/mandrake/es/index.html ]; then
+#                cp -f /usr/share/mdk/kde/Documentation-es.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        elif [ $langg = fr ] && [ -r /usr/share/doc/mandrake/fr/index.html ]; then
+#                cp -f /usr/share/mdk/kde/Documentation-fr.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        elif [ $langg = it ] && [ -r /usr/share/doc/mandrake/it/index.html ] ; then
+#                cp -f /usr/share/mdk/kde/Documentation-it.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        elif [ $langg = en ] || [ -z $langg ] && [ -r /usr/share/doc/mandrake/en/index.html ] ; then
+#                cp -f /usr/share/mdk/kde/Documentation.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        elif [ -r /usr/share/doc/mandrake/en/index.html ] ; then
+#                cp -f /usr/share/mdk/kde/Documentation.desktop $HOME/Desktop/Mandrake\ Documentation.desktop
+#		touch $HOME/Desktop/.doc
+#        fi
+#fi
+
+
+### don't want this
+# Mandrake Club
+#if [ ! -e $HOME/Desktop/.mdkclub ]; then
+#		cp -f /usr/share/mdk/kde/MandrakeClub.desktop $HOME/Desktop/
+#		touch $HOME/Desktop/.mdkclub
+#fi
+
+### don't want this
+# Mandrake Expert
+#if [ ! -e $HOME/Desktop/.mdkexpert ]; then
+#	cp -f /usr/share/mdk/kde/Mandrake\ Expert.desktop $HOME/Desktop/
+#	touch $HOME/Desktop/.mdkexpert
+#fi
+
+### don't want this
+# Mandrake Online
+#if [ ! -e ~/Desktop/.mdkonline ] && [ -e /usr/share/applnk-mdk/Configuration/Other/Discover\ custom\ services.desktop ]; then
+#    cp /usr/share/applnk-mdk/Configuration/Other/Discover\ custom\ services.desktop ~/Desktop/
+#    touch ~/Desktop/.mdkonline
+#fi
+
+### don't want this
+# Mandrake Store
+#if [ ! -e $HOME/Desktop/.mdkstore ]; then
+#	cp -f /usr/share/mdk/kde/Mandrake\ Store.desktop $HOME/Desktop/
+#	touch $HOME/Desktop/.mdkstore
+#fi
+
+
+# Trash
+#cp /usr/share/apps/kdesktop/directory.trash $HOME/Desktop/
+
+
+#sleep 2s
+
+/usr/bin/ArrangeIcons

@@ -1,0 +1,64 @@
+#!/bin/sh
+#
+# This script will be executed *after* all the other init scripts.
+# You can put your own initialization stuff in here if you don't
+# want to do the full Sys V style init stuff.
+#
+# * 22 February 2002, Jaco Greeff <jaco@puxedo.org>
+# - Modified from the Mandrake rc.local to not override /etc/issue
+#
+
+[ -f /etc/sysconfig/msec ] && source /etc/sysconfig/msec
+[ -z "$SECURE_LEVEL" ] && SECURE_LEVEL=3
+
+# Source functions
+. /etc/init.d/functions
+
+if [ -f /etc/mandrake-release -a $SECURE_LEVEL -lt 4 ]; then
+    R=$(cat /etc/mandrake-release)
+
+    arch=$(uname -m)
+    a="a"
+    case "_$arch" in
+	    _a*) a="an";;
+	    _i*) a="an";;
+    esac
+
+    NUMPROC=`egrep -c "^cpu[0-9]+" /proc/stat`
+    if [ "$NUMPROC" -gt "1" ]; then
+        SMP="$NUMPROC-processor "
+	[ "$NUMPROC" = "2" ] && \
+	SMP="Dual-processor "
+        if [ "$NUMPROC" = "8" -o "$NUMPROC" = "11" ]; then
+            a="an"
+	else
+	    a="a"
+        fi
+    fi
+
+    # This will overwrite /etc/issue at every boot.  So, make any changes you
+    # want to make to /etc/issue here or you will lose them when you reboot.
+
+#    if [ -x /usr/bin/linux_logo ];then
+#	/usr/bin/linux_logo -c -n -f | sed -e 's|\\|\\\\|g' > /etc/issue
+#	echo "" >> /etc/issue
+#    else
+#	> /etc/issue
+#    fi
+#    echo "$R" >> /etc/issue
+#    echo "Kernel $(uname -r) on $a $SMP$(uname -m) / \l" >> /etc/issue
+#
+#    if [ "$SECURE_LEVEL" -le 3 ];then
+#	echo "Welcome to ${HOST}" > /etc/issue.net
+#	echo "$R" >> /etc/issue.net
+#	echo "Kernel $(uname -r) on $a $SMP$(uname -m)" >> /etc/issue.net
+#    else
+#	echo "Welcome to Mandrake Linux" > /etc/issue.net
+#	echo "-------------------------" >> /etc/issue.net
+#    fi
+	cat /etc/issue >/etc/issue.net
+#elif [ $SECURE_LEVEL -ge 4 ]; then
+#    rm -f /etc/issue /etc/issue.net
+fi
+
+touch /var/lock/subsys/local

@@ -1,0 +1,760 @@
+#!/usr/bin/perl
+#
+# Automatic hardware detection script for MDK MiniCD
+# Copyright (C) 2002-2003, Jaco Greeff
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Changelog:
+#
+# * 07 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - Redirect both STDIN and STDOUT now to get past libDrakX output
+#
+# * 04 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - added "partitions" next to drives description
+#
+# * 02 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - Fix spacing in the disk detection link creation
+# - Don't create comment line for disk that is not removable
+#
+# * 26 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Added detection of disk devices
+# - disk device code should be optimised, some code duplication with the
+#   mdk stuff (this needs a nice, huge cleanup, but it works for now)
+#
+# * 23 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Moved detect_serial and usb up the chain to try and make sure the right
+#   mouse is actually detected
+#
+# * 12 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Initial version
+#
+
+use lib qw(/usr/lib/libDrakX);
+
+use standalone;
+
+use common;
+use modules;
+
+use harddrake::sound;
+use mouse;
+use keyboard;
+use Xconfig::card;
+use Xconfig::monitor;
+use Xconfig::parse;
+use Xconfig::resolution_and_depth;
+use Xconfig::screen;
+use Xconfig::xfree;
+use Xconfig::xfree4;
+
+use fsedit;
+use fs;
+
+### global constants
+my $SCRIPT_DESC    = "hardware detection";
+my $SCRIPT_NAME    = "hwdetect.pl";
+my $SCRIPT_VER     = "1.0";
+my $RES_COL        = 65;
+my $ESC            = "\x1B[";
+my $MOVE_TO_COL    = $ESC.$RES_COL."G";
+my $COLOR_GREEN    = $ESC."1;32m";
+my $COLOR_RED      = $ESC."1;31m";
+my $COLOR_YELLOW   = $ESC."1;33m";
+my $COLOR_NORMAL   = $ESC."0;39m";
+
+### global varibles
+my $printdebug       = 0;
+my $probeonly        = 0;
+my @detected_devices = ();
+my $rawX             = undef;
+my $stdout           = undef;
+my $stderr           = undef;
+
+sub print_stdout {
+	print $stdout @_ if (defined $stdout);
+}
+
+sub print_stderr {
+	print $stderr @_ if (defined $stderr);
+}
+
+sub rmws {
+	my ($str) = @_;
+	$str =~ s/\s+$//;
+	$str =~ s/^\s+//;
+	$str;
+}
+
+sub move_up_lines {
+	my ($lines) = @_;
+	print_stdout $ESC.$lines."A" if (!$printdebug);
+}
+
+sub move_down_lines {
+	my ($lines) = @_;
+	while ($lines) {
+		print_stdout "\n" if (!$printdebug);
+		$lines--;
+	}
+}
+
+sub print_success {
+	print_stdout $MOVE_TO_COL if (!$printdebug);
+	print_stdout "[  ";
+	print_stdout $COLOR_GREEN if (!$printdebug);
+	print_stdout "OK";
+	print_stdout $COLOR_NORMAL if (!$printdebug);
+	print_stdout "  ]\n";
+}
+
+sub print_loaded {
+	print_stdout $MOVE_TO_COL if (!$printdebug);
+	print_stdout "[";
+	print_stdout $COLOR_GREEN if (!$printdebug);
+	print_stdout "LOADED";
+	print_stdout $COLOR_NORMAL if (!$printdebug);
+	print_stdout "]\n";
+}
+
+sub print_warning {
+	print_stdout $MOVE_TO_COL if (!$printdebug);
+	print_stdout "[ ";
+	print_stdout $COLOR_YELLOW if (!$printdebug);
+	print_stdout "WARN";
+	print_stdout $COLOR_NORMAL if (!$printdebug);
+	print_stdout " ]\n";
+}
+
+sub print_failed {
+	print_stdout $MOVE_TO_COL if (!$printdebug);
+	print_stdout "[";
+	print_stdout $COLOR_RED if (!$printdebug);
+	print_stdout "FAILED";
+	print_stdout $COLOR_NORMAL if (!$printdebug);
+	print_stdout "]\n";
+}
+
+sub print_hash {
+	my ($hash) = @_;
+	print_stdout "<device>\n";
+	foreach my $key (keys %$hash) {
+		my $value = $hash->{$key};
+		print_stdout "\t<$key>$value</$key>\n";
+	}
+	print_stdout "</device>\n";
+}
+
+sub print_device {
+	my ($module, $vendor, $desc) = @_;
+	print_stdout "    ";
+	$vendor = rmws($vendor);
+	print_stdout $vendor.", " unless ($vendor eq "");
+	print_stdout rmws($desc);
+	#print_stdout " (".$module.")" unless ($module =~ /unknown/);
+}
+
+sub hwdetect_init {
+	print "\n";
+	open $stdout, ">&STDOUT";
+	open $stderr, ">&STDERR";
+	open STDOUT, '>', "/dev/null";
+	open STDERR, '>', "/dev/null";
+	select $stdout; $| = 1;
+	select $stderr; $| = 1;
+	select STDERR; $| = 1;
+	select STDOUT; $| = 1;
+}
+
+sub hwdetect_deinit {
+	close STDOUT;
+	close STDERR;
+	open STDOUT, ">&", $stdout;
+	open STDERR, ">&", $stderr;
+	select STDOUT;
+	print "\n";
+}
+
+sub hwdetect_get_mediatype {
+	my ($media_type) = @_;
+	my @rets = ();
+	foreach my $device (@detected_devices) {
+		if ($device->{media_type} =~ /$media_type/) {
+			push(@rets, $device);
+		}
+	}
+	@rets;
+}
+
+sub hwdetect_get_bustype {
+	my ($bus_type) = @_;
+	my @rets = ();
+	foreach my $device (@detected_devices) {
+		if ($device->{bus} =~ /$bus_type/) {
+			push(@rets, $device);
+		}
+	}
+	@rets;
+}
+
+sub hwdetect_loadmod {
+	my ($module, $vendor, $desc) = @_;
+	my $done = 0;
+	print_device($module, $vendor, $desc);
+	unless ($module =~ /unknown/) {
+		my $res = 1;
+		unless ($probeonly) {
+			$module = "usbmouse" if ($module =~ /^Mouse\:USB/);
+			$res = system("(/sbin/modprobe $module) 2>/dev/null");
+		}
+		$res ? $probeonly ? print_warning : print_failed() : print_loaded();
+		$done++;
+	}
+	print_stdout "\n" unless($done);
+}
+
+sub read_proc_cpu {
+	my (@cpus, $cpu);
+	foreach (cat_("/proc/cpuinfo")) {
+		if (/^processor/) { # ix86 specific
+			push @cpus, $cpu if $cpu;
+			$cpu = {};
+		}
+		/^([^\t]*).*:\s(.*)$/;
+		$cpu->{$1} = $2 if $1;
+	}
+	push @cpus, $cpu;
+	@cpus;
+}
+
+sub read_proc_mem {
+	my ($mem);
+	foreach (cat_("/proc/meminfo")) {
+		if (/\:/) {
+			/^([^\t]*).*:\s(.*)$/;
+			$mem->{$1} = $2 if $1;
+		}
+	}
+	$mem;
+}
+
+sub hwdetect_getmachine {
+	print_stdout "Detecting architecture: ";
+	my @probed_cpus = ();
+	my $probed_mem = ();
+	eval { @probed_cpus = read_proc_cpu() };
+	eval { $probed_mem = read_proc_mem() };
+	print_stdout scalar(@probed_cpus)." CPUs, ".rmws($probed_mem->{MemTotal})." memory found";
+	scalar @probed_cpus && $probed_mem ? print_success() : print_failed();
+	foreach my $cpu (@probed_cpus) {
+		hwdetect_loadmod('unknown', $cpu->{vendor_id}, $cpu->{'model name'}." ".$cpu->{'cpu MHz'}."MHz ".$cpu->{'cache size'});
+		print_hash($cpu) if ($printdebug);
+	}
+	if ($probed_mem) {
+		hwdetect_loadmod('unknown', "Available Memory", rmws($probed_mem->{MemFree})." of ".rmws($probed_mem->{MemTotal}));
+		#hwdetect_loadmod('unknown', "Available Swap", rmws($probed_mem->{SwapFree})." of ".rmws($probed_mem->{SwapTotal}));
+		print_hash($probed_mem) if ($printdebug);
+	}
+}
+
+sub hwdetect_probeall {
+	print_stdout "Probing devices: ";
+	@detected_devices = ();
+	eval { detect_devices::probeSerialDevices(); };
+	eval { @detected_devices = detect_devices::probeall(1); };
+	scalar @detected_devices ? print_success() : print_failure();
+}
+
+sub hwdetect_getmouse {
+	print_stdout "Detecting mouse: ";
+	my $probed_vendor = "";
+	my $probed_desc = "";
+	my $device = undef;
+	my $probed_mouse = undef;
+	eval { $probed_mouse = mouse::detect() and print_success(); } or print_failure();
+	if ($probed_mouse->{device} =~ /usbmouse/) {
+		my @probed_mice = hwdetect_get_mediatype('Mouse');
+		if (scalar @probed_mice) {
+			$device = $probed_mice[0];
+			($probed_vendor, $probed_desc) = split(/\|/, $device->{description});
+		}
+	}
+	hwdetect_loadmod('unknown', $probed_vendor, $probed_mouse->{type}." ".$probed_mouse->{name}." ".$probed_desc);
+	mouse::set_xfree_conf($probed_mouse, $rawX);
+	mouse::write(undef, $probed_mouse) unless ($probe_only);
+	print_hash($probed_mouse) if ($printdebug);
+}
+
+sub hwdetect_getvideo {
+	print_stdout "Detecting video cards: ";
+	my @probed_cards = ();
+	my $selected_card = undef;
+	eval { @probed_cards = Xconfig::card::probe(); };
+	print_stdout scalar(@probed_cards)." found";
+	scalar @probed_cards ? print_success() : print_failed();
+	my $numwritten = 0;
+	foreach my $card (@probed_cards) {
+		my ($probed_vendor, $probed_desc) = split(/\|/, $card->{description});
+		hwdetect_loadmod('unknown', $probed_vendor, $card->{card_name});
+		unless ($numwritten) { # one card only :(
+			$selected_card = $card;
+			Xconfig::card::to_raw_X($card, $rawX);
+		}
+		print_hash($card) if ($printdebug);
+		$numwritten++;
+	}
+
+	print_stdout "Selecting monitor: ";
+	my $probed_monitor = undef;
+	eval { $probed_monitor = Xconfig::monitor::configure_auto_install($rawX, Xconfig::xfree->read()) and print_success(); } or print_failure();
+	#eval { $probed_monitor = Xconfig::monitor::configure(undef, $rawX, "yes") and print_success(); } or print_failure();
+	hwdetect_loadmod('unknown', $probed_monitor->{VendorName}, $probed_monitor->{ModelName}, 0);
+	print_hash($probed_monitor) if ($printdebug);
+
+	# select default res
+	#Xconfig::screen::configure($rawX, $selected_card);
+	Xconfig::resolution_and_depth::configure(undef, $rawX, $selected_card, $probed_monitor, "yes");
+}
+
+sub hwdetect_getsound {
+	print_stdout "Detecting sound cards: ";
+	my @probed_cards = ();
+	eval { @probed_cards = hwdetect_get_mediatype('MULTIMEDIA_AUDIO'); };
+	print_stdout scalar(@probed_cards)." found";
+	scalar @probed_cards ? print_success() : print_warning();
+	foreach my $card (@probed_cards) {
+		my ($probed_vendor, $probed_desc) = split(/\|/, $card->{description});
+		hwdetect_loadmod($card->{driver}, $probed_vendor, $probed_desc);
+		print_hash($card) if ($printdebug);
+	}
+}
+
+sub hwdetect_getnetwork {
+	print_stdout "Detecting network cards: ";
+	my @probed_cards = ();
+	eval { @probed_cards = hwdetect_get_mediatype('NETWORK_ETHERNET'); };
+	print_stdout scalar(@probed_cards)." found";
+	scalar @probed_cards ? print_success() : print_warning();
+	foreach my $card (@probed_cards) {
+		my ($probed_vendor, $probed_desc) = split(/\|/, $card->{description});
+		hwdetect_loadmod($card->{driver}, $probed_vendor, $probed_desc);
+		print_hash($card) if ($printdebug);
+	}
+}
+
+sub hwdetect_getserial {
+	print_stdout "Detecting serial devices: ";
+	my @probed_devices = ();
+	print_stdout scalar(@probed_devices)." found";
+	print_stdout " (not implemented)";
+	print_warning();
+}
+
+sub hwdetect_getusb {
+	print_stdout "Detecting USB devices: ";
+	my @probed_devices = ();
+	eval { @probed_devices = hwdetect_get_bustype('USB'); };
+	my @usable_devices = ();
+	foreach my $device (@probed_devices) {
+		#unless (($device->{media_type} =~ /^Hub/) ||
+		#	($device->{media_type} =~ /Mouse/ ||
+		#	($device->{description} =~ /Hub/))) {
+			push(@usable_devices, $device);
+		#}
+	}
+	print_stdout scalar(@usable_devices) . " found";
+	scalar @probed_devices ? print_success() : print_warning();
+	foreach my $device (@usable_devices) {
+		my ($probed_vendor, $probed_desc) = split(/\|/, $device->{description});
+		hwdetect_loadmod($device->{driver}, $probed_vendor, $probed_desc);
+		print_hash($device) if ($printdebug);
+	}
+}
+
+sub hwdetect_all {
+	foreach my $device (@detected_devices) {
+		print_hash($device) if ($printdebug);
+	}
+}
+
+sub hwdetect_readconf {
+	print_stdout "Reading modules configuration: ";
+	modules::mergein_conf('/etc/modules.conf') if -r '/etc/modules.conf';
+	print_success();
+	#print_stdout "Creating skeleton X configuration: ";
+	#eval { $rawX = Xconfig::xfree->empty_config() and print_success(); } or print_failure();
+	print_stdout "Reading X configuration: ";
+	eval { $rawX = Xconfig::xfree->read() and print_success(); } or print_failure();
+}
+
+sub hwdetect_writexconf {
+	print_stdout "Writing X configuration: ";
+
+	### keyboard
+	my $keyboard = keyboard::read();
+	my $kb = "us";
+	keyboard::KEYBOARD2text($kb) or die "bad keyboard $kb\n";
+	$keyboard->{KEYBOARD} = $kb;
+	my $xkb = keyboard::keyboard2full_xkb($keyboard);
+	system('setxkbmap', '-option', '') if $xkb->{XkbOptions}; #- need re-initialised other toggles are cumulated
+	system('setxkbmap', $xkb->{XkbLayout}, '-model' => $xkb->{XkbModel}, '-option' => $xkb->{XkbOptions} || '', '-compat' => $xkb->{XkbCompat} || '');
+	eval { $rawX->set_keyboard($xkb); };
+
+	### actual X
+	eval { $rawX->write('', Xconfig::xfree4::config_file) and print_success(); } or print_failure();
+}
+
+# descriptive name, type (or auto), mount defaults
+my %fstypes = (
+	0x0   => ['Empty'                                   ,''        ],
+	0x183 => ['Journalised FS: ReiserFS'                ,'reiserfs'],
+	0x283 => ['Journalised FS: XFS'                     ,'xfs'     ],
+	0x383 => ['Journalised FS: JFS'                     ,'jfs'     ],
+	0x483 => ['Journalised FS: ext3'                    ,'ext3'    ],
+	0x1   => ['DOS 12-bit FAT'                          ,'ufs'     ],
+	0x2   => ['XENIX root'                              ,'ufs'     ],
+	0x3   => ['XENIX /usr'                              ,''        ],
+	0x4   => ['DOS 16-bit FAT (up to 32M)'              ,'ufs'     ],
+	0x5   => ['DOS 3.3+ Extended Partition'             ,''        ],
+	0x6   => ['DOS FAT16'                               ,'ufs'     ],
+	0x7   => ['NTFS'                                    ,'ntfs'    ],
+	0x8   => ['OS/2 (v1.0-1.3 only)'                    ,'ufs'     ],
+	0x9   => ['AIX data partition'                      ,''        ],
+	0xa   => ['OS/2 Boot Manager'                       ,''        ],
+	0xb   => ['FAT32'                                   ,'vfat'    ],
+	0xc   => ['Win98 FAT32, LBA-mapped'                 ,'vfat'    ],
+	0xe   => ['Win95: DOS 16-bit FAT, LBA-mapped'       ,'vfat'    ],
+	0xf   => ['Win95: Extended partition, LBA-mapped'   ,''        ],
+	0x10  => ['OPUS (?)'                                ,''        ],
+	0x11  => ['Hidden DOS 12-bit FAT'                   ,''        ],
+	0x12  => ['Compaq/HP config partition'              ,''        ],
+	0x14  => ['Hidden DOS 16-bit FAT <32M'              ,''        ],
+	0x16  => ['Hidden DOS 16-bit FAT >=32M'             ,''        ],
+	0x17  => ['Hidden IFS (e.g., HPFS)'                 ,''        ],
+	0x18  => ['AST Windows swapfile'                    ,''        ],
+	0x1b  => ['Hidden WIN95 OSR2 32-bit FAT'            ,'vfat'    ],
+	0x1c  => ['Hidden WIN95 OSR2 32-bit FAT, LBA-mapped','vfat'    ],
+	0x1e  => ['Hidden FAT95'                            ,'vfat'    ],
+	0x22  => ['Used for Oxygen Extended Partition Table',''        ],
+	0x24  => ['NEC DOS 3.x'                             ,''        ],
+	0x35  => ['JFS (OS/2)'                              ,''        ],
+	0x38  => ['THEOS ver 3.2 2gb partition'             ,''        ],
+	0x39  => ['THEOS ver 4 spanned partition'           ,''        ],
+	0x3a  => ['THEOS ver 4 4gb partition'               ,''        ],
+	0x3b  => ['THEOS ver 4 extended partition'          ,''        ],
+	0x3c  => ['PartitionMagic recovery partition'       ,''        ],
+	0x40  => ['Venix 80286'                             ,''        ],
+	0x41  => ['Linux/MINIX (sharing disk with DRDOS)'   ,''        ],
+	0x42  => ['Windows Dynamic Partition'               ,''        ],
+	0x43  => ['Linux native (sharing disk with DRDOS)'  ,''        ],
+	0x45  => ['EUMEL/Elan'                              ,''        ],
+	0x46  => ['EUMEL/Elan 0x46'                         ,''        ],
+	0x47  => ['EUMEL/Elan 0x47'                         ,''        ],
+	0x48  => ['EUMEL/Elan 0x48'                         ,''        ],
+	0x4d  => ['QNX4.x'                                  ,''        ],
+	0x4e  => ['QNX4.x 2nd part'                         ,''        ],
+	0x4f  => ['QNX4.x 3rd part / Oberon partition'      ,''        ],
+	0x50  => ['OnTrack Disk Manager (older versions) RO',''        ],
+	0x51  => ['Novell'                                  ,''        ],
+	0x52  => ['CP/M / Microport SysV/AT'                ,''        ],
+	0x53  => ['Disk Manager 6.0 Aux3'                   ,''        ],
+	0x54  => ['Disk Manager 6.0 Dynamic Drive Overlay'  ,''        ],
+	0x55  => ['EZ-Drive'                                ,''        ],
+	0x56  => ['Golden Bow VFeature Partitioned Volume'  ,''        ],
+	0x57  => ['DrivePro'                                ,''        ],
+	0x5c  => ['Priam EDisk'                             ,''        ],
+	0x61  => ['SpeedStor'                               ,''        ],
+	0x63  => ['Unix System V (SCO, ...), Mach, GNU Hurd',''        ],
+	0x64  => ['PC-ARMOUR protected partition'           ,''        ],
+	0x65  => ['Novell Netware 3.xx or 4.xx'             ,''        ],
+	0x67  => ['Novell'                                  ,''        ],
+	0x68  => ['Novell 0x68'                             ,''        ],
+	0x69  => ['Novell 0x69'                             ,''        ],
+	0x70  => ['DiskSecure Multi-Boot'                   ,''        ],
+	0x75  => ['IBM PC/IX'                               ,''        ],
+	0x80  => ['MINIX until 1.4a'                        ,''        ],
+	0x81  => ['MINIX since 1.4b, early Linux'           ,''        ],
+	0x82  => ['Linux swap'                              ,'swap'    ],
+	0x83  => ['Linux native'                            ,'ext2'    ],
+	0x84  => ['OS/2 hidden C: drive'                    ,''        ],
+	0x85  => ['Linux extended partition'                ,''        ],
+	0x86  => ['Old Linux RAID partition superblock'     ,''        ],
+	0x87  => ['NTFS volume set'                         ,''        ],
+	0x8a  => ['Linux Kernel Partition (AiR-BOOT)'       ,''        ],
+	0x8e  => ['Linux Logical Volume Manager partition'  ,''        ],
+	0x93  => ['Amoeba'                                  ,''        ],
+	0x94  => ['Amoeba bad block table'                  ,''        ],
+	0x99  => ['DCE376 logical drive'                    ,''        ],
+	0xa0  => ['IBM Thinkpad hibernation partition'      ,''        ],
+	0xa5  => ['BSD/386, 386BSD, NetBSD, FreeBSD'        ,''        ],
+	0xa6  => ['OpenBSD'                                 ,''        ],
+	0xa7  => ['NEXTSTEP'                                ,''        ],
+	0xa9  => ['NetBSD'                                  ,''        ],
+	0xaa  => ['Olivetti Fat 12 1.44Mb Service Partition',''        ],
+	0xb7  => ['BSDI filesystem'                         ,''        ],
+	0xb8  => ['BSDI swap partition'                     ,''        ],
+	0xbe  => ['Solaris boot partition'                  ,''        ],
+	0xc0  => ['CTOS / REAL/32 secure small partition'   ,''        ],
+	0xc1  => ['DRDOS/secured (FAT-12)'                  ,''        ],
+	0xc4  => ['DRDOS/secured (FAT-16, < 32M)'           ,''        ],
+	0xc6  => ['DRDOS/secured (FAT-16, >= 32M)'          ,''        ],
+	0xc7  => ['Windows NT corrupted NTFS volume'        ,''        ],
+	0xcb  => ['reserved for DRDOS/secured (FAT32)'      ,''        ],
+	0xcc  => ['reserved for DRDOS/secured (FAT32, LBA)' ,''        ],
+	0xcd  => ['CTOS Memdump?'                           ,''        ],
+	0xce  => ['reserved for DRDOS/secured (FAT16, LBA)' ,''        ],
+	0xd0  => ['REAL/32 secure big partition'            ,''        ],
+	0xd1  => ['Old Multiuser DOS secured FAT12'         ,''        ],
+	0xd4  => ['Old Multiuser DOS secured FAT16 <32M'    ,''        ],
+	0xd5  => ['Old Multiuser DOS secured extended'      ,''        ],
+	0xd6  => ['Old Multiuser DOS secured FAT16 >=32M'   ,''        ],
+	0xd8  => ['CP/M-86'                                 ,''        ],
+	0xdb  => ['Digital Research CP/M'                   ,''        ],
+	0xdd  => ['Hidden CTOS Memdump?'                    ,''        ],
+	0xe1  => ['DOS access partition'                    ,''        ],
+	0xe3  => ['DOS R/O or SpeedStor'                    ,''        ],
+	0xe4  => ['16-bit FAT extended partition <1024 cyl.',''        ],
+	0xeb  => ['BeOS'                                    ,''        ],
+	0xee  => ['EFI GPT'                                 ,''        ],
+	0xef  => ['EFI (FAT-12/16/32)'                      ,''        ],
+	0xf1  => ['SpeedStor 0xf1'                          ,''        ],
+	0xf2  => ['DOS 3.3+ secondary partition'            ,''        ],
+	0xf4  => ['SpeedStor large partition'               ,''        ],
+	0xf5  => ['Prologue multi-volume partition'         ,''        ],
+	0xfd  => ['Linux RAID'                              ,''        ],
+	0xfe  => ['SpeedStor >1024 cyl'                     ,''        ],
+	0xff  => ['Xenix Bad Block Table'                   ,''        ]
+);
+
+my %fsopts = (
+	'ext2'     => 'noauto,user,ro,exec',
+	'ext3'     => 'noauto,user,ro,exec',
+	'jfs'      => 'noauto,user,ro,exec',
+	'ntfs'     => 'noauto,user,ro,exec,iocharset=iso8859-1,umask=0',
+	'reiserfs' => 'noauto,user,ro,exec,notail,noatime',
+	'swap'     => 'defaults',
+	'ufs'      => 'noauto,user,ro,exec,iocharset=iso8859-1,umask=0',
+	'vfat'     => 'noauto,user,ro,exec,iocharset=iso8859-1,codepage=850,umask=0',
+	'xfs'      => 'noauto,user,ro,exec'
+);
+
+sub hwdetect_getdisks {
+	print_stdout "Detecting disk drives/partitions: ";
+	my @detected_fstab = ();
+	my %detected_mounts = ();
+	my $all_hdds = fsedit::get_hds({}, undef);
+	fs::get_raw_hds('', $all_hdds);
+	if ($printdebug) {
+		foreach my $key (keys %$all_hdds) {
+			print_stdout $key . " ->\n";
+			my @disks = @{$all_hdds->{$key}};
+			foreach my $disk (@disks) {
+				print_stdout "\tdisk:\n";
+				foreach my $diskkey (keys %$disk) {
+					print_stdout "\t\t" . $diskkey . " -> " . $disk->{$diskkey} . "\n";
+				}
+			}
+		}
+	}
+
+	### do all the cd, floppy stuff
+	foreach my $disk (@{$all_hdds->{raw_hds}}) {
+		if ($printdebug) {
+			print_stdout "removable: " . $disk->{info} . "\n";
+			print_stdout "\t/dev/" . $disk->{devfs_device} . " on /mnt/" . $disk->{device} . "\n";
+		}
+		unless ($disk->{media_type} =~ /^hd/) {
+			if ($disk->{media_type} =~ /^fd|^cdrom/) {
+				my $entry = "\n### " . $disk->{media_type} . ": " . $disk->{info};
+				$entry = $entry . "\n# /dev/$disk->{device}";
+				push(@detected_fstab, $entry);
+				$entry = "none";
+				$entry = $entry . "\t/mnt/" . $disk->{device};
+				$detected_mounts{$disk->{device}} = [$disk->{devfs_device}, $disk->{media_type}];
+				$entry = $entry . "\tsupermount";
+				$entry = $entry . "\tdev=/dev/" . $disk->{devfs_device} . ",fs=auto,user,ro,exec,--,iocharset=iso8859-1,codepage=850,umask=0";
+				$entry = $entry . ",nohide" if ($disk->{media_type} =~ /^cdrom/);
+				$entry = $entry . "\t0 0";
+				push(@detected_fstab, $entry);
+			}
+		}
+	}
+
+	### do the hard disks
+	foreach my $disk (@{$all_hdds->{hds}}) {
+		if ($printdebug) {
+			print_stdout "disk: " . $disk->{info} . "\n";
+			print_stdout "\tprimary:\n";
+			foreach my $prim (keys %{$disk->{primary}}) {
+				unless ($prim =~ /normal/ || $prim =~ /extended/ || $prim =~ /raw/) {
+					print_stdout "\t\t" . $prim . " -> " . $disk->{primary}->{$prim} . "\n";
+				}
+			}
+		}
+		my $entry = "\n### hdd: " . $disk->{info};
+		push(@detected_fstab, $entry);
+		if ($printdebug) {
+			print_stdout "\t\tnormal:\n";
+			foreach my $norm (@{$disk->{primary}->{normal}}) {
+				print_stdout "\t\t\t" . $norm . "\n";
+			}
+			print_stdout "\t\textended:\n";
+			foreach my $extkey (%{$disk->{primary}->{extended}}) {
+				print_stdout "\t\t\t" . $extkey . " -> " . $disk->{primary}->{extended}->{$extkey} . "\n";
+			}
+		}
+		foreach my $raw (@{$disk->{primary}->{raw}}) {
+			if ($printdebug) {
+				print_stdout "\t\traw:" . "\n";
+				foreach $rawkey (keys %$raw) {
+					print_stdout "\t\t\t" . $rawkey . " -> " . $raw->{$rawkey} . "\n";
+				}
+			}
+			unless ($raw->{size} =~ /^0/) {
+				### the topmost extention might be set, which means
+				### we are missing it (only do this if we cannot find it,
+				### see it as a try 2)
+				$raw->{type} = $raw->{type} & 0xFF unless ($fstypes{$raw->{type}});
+				if ($raw->{devfs_device} && $fstypes{$raw->{type}}[1] && $fsopts{$fstypes{$raw->{type}}[1]}) {
+					$entry = "# /dev/" . $raw->{device} . ", size=" . $raw->{size} . ", type=" . $raw->{type} . ": " . $fstypes{$raw->{type}}[0] . " (primary)";
+					push(@detected_fstab, $entry);
+					$entry = "/dev/" . $raw->{devfs_device};
+					if ($raw->{type} =~ /^130/) {
+						$entry = $entry . "\tswap";
+					}
+					else {
+						$entry = $entry . "\t/mnt/" . $raw->{device};
+						$detected_mounts{$raw->{device}} = [$raw->{devfs_device}, 'hd'];
+					}
+					$entry = $entry . "\t" . $fstypes{$raw->{type}}[1];
+					$entry = $entry . "\t" . $fsopts{$fstypes{$raw->{type}}[1]};
+					$entry = $entry . "\t0 0";
+					push(@detected_fstab, $entry);
+				}
+			}
+		}
+		foreach my $ext (@{$disk->{extended}}) {
+			if ($printdebug) {
+				print_stdout "\textended: " . $ext->{info} . "\n";
+				foreach my $key (keys %$ext) {
+					unless ($key =~ /normal/ || $key =~ /extended/ || $key =~ /raw/) {
+						print_stdout "\t\t" . $key . " -> " . $ext->{$key} . "\n";
+					}
+				}
+				print_stdout "\t\tnormal:\n";
+				foreach my $normkey (%{$ext->{normkey}}) {
+					print_stdout "\t\t\t" . $normkey . " -> " . $disk->{primary}->{normal}->{$normkey} . "\n";
+				}
+				print_stdout "\t\textended:\n";
+				foreach my $extkey (%{$ext->{extended}}) {
+					print_stdout "\t\t\t" . $extkey . " -> " . $disk->{primary}->{extended}->{$extkey} . "\n";
+				}
+			}
+			foreach my $raw (@{$ext->{raw}}) {
+				if ($printdebug) {
+					print_stdout "\t\traw:" . "\n";
+					foreach $rawkey (keys %$raw) {
+						print_stdout "\t\t\t" . $rawkey . " -> " . $raw->{$rawkey} . "\n";
+					}
+				}
+				unless ($raw->{size} =~ /^0/) {
+					### the topmost extention might be set, which means
+					### we are missing it (only do this if we cannot find it,
+					### see it as a try 2)
+					$raw->{type} = $raw->{type} & 0xFF unless ($fstypes{$raw->{type}});
+					if ($raw->{devfs_device} && $fstypes{$raw->{type}}[1] && $fsopts{$fstypes{$raw->{type}}[1]}) {
+						$entry = "# /dev/" . $raw->{device} . ", size=" . $raw->{size} . ", type=" . $raw->{type} . ": " . $fstypes{$raw->{type}}[0] . " (extended)";
+						push(@detected_fstab, $entry);
+						$entry = "/dev/" . $raw->{devfs_device};
+						if ($raw->{type} =~ /^130/) {
+							$entry = $entry . "\tswap";
+						}
+						else {
+							$entry = $entry . "\t/mnt/" . $raw->{device};
+							$detected_mounts{$raw->{device}} = [$raw->{devfs_device}, 'hd'];
+						}
+						$entry = $entry . "\t" . $fstypes{$raw->{type}}[1];
+						$entry = $entry . "\t" . $fsopts{$fstypes{$raw->{type}}[1]};
+						$entry = $entry . "\t0 0";
+						push(@detected_fstab, $entry);
+					}
+				}
+			}
+		}
+	}
+	$num = 0;
+	$num++ foreach (keys %detected_mounts);
+	print_stdout "$num found";
+	if (scalar @detected_fstab) {
+		print_success();
+		unless ($probeonly) {
+			### create /mnt/*
+			print_stdout "    Creating /mnt entries: ";
+			my $cmd;
+			foreach my $mount (keys %detected_mounts) {
+				my $device = $detected_mounts{$mount}[0];
+				$cmd = "mkdir -p /mnt/$mount 2>&1 >/dev/null";
+				`$cmd`;
+			}
+			print_success();
+
+			### write /etc/fstab
+			print_stdout "    Writing /etc/fstab: ";
+			open FSTAB, '>>', '/etc/fstab';
+			print FSTAB "\n### entries below this line were automatically added by /etc/rc.d/hwdetect.pl\n";
+			foreach my $entry (@detected_fstab) {
+				print FSTAB $entry . "\n";
+			}
+			close FSTAB;
+			$cmd = "md5sum /etc/fstab >/home/user/Desktop/.md5sumetcfstab && chown user.user /home/user/Desktop/.md5sumetcfstab";
+			`$cmd`;
+			print_success();
+
+			### write /home/user/Desktop entries
+			print_stdout "    Creating desktop links: ";
+			foreach my $mount (keys %detected_mounts) {
+				my $device = $detected_mounts{$mount}[0];
+				my $type = $detected_mounts{$mount}[1];
+				$cmd = "cat /etc/hwdetect/desktop.$type.in | sed 's|\@DEVICE|$device|g' | sed 's|\@MOUNT|$mount|g' >/home/user/Desktop/$mount.desktop && chown user.user /home/user/Desktop/$mount.desktop";
+				`$cmd`;
+			}
+			print_success();
+		}
+	}
+	else {
+		print_warning();
+	}
+}
+
+foreach (@ARGV) {
+	if   (/^--debug/)       { $printdebug = 1; }
+	elsif (/^--probe-only/) { $probeonly = 1;  }
+	else { die "ERROR: Unknown option '$_'";   }
+}
+
+hwdetect_init();
+hwdetect_getmachine();
+hwdetect_readconf();
+hwdetect_probeall();
+hwdetect_all() if ($printdebug);
+hwdetect_getserial();
+hwdetect_getusb() if -e '/proc/bus/usb/devices';
+hwdetect_getmouse();
+hwdetect_getvideo();
+hwdetect_getsound();
+hwdetect_getnetwork();
+hwdetect_writexconf() unless ($probeonly);
+hwdetect_getdisks();
+hwdetect_deinit();

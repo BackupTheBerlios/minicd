@@ -1,0 +1,15 @@
+[Desktop Action Format]
+Exec=kfloppy
+Name=Format
+
+[Desktop Entry]
+Actions=Format
+Dev=/dev/@DEVICE
+Encoding=UTF-8
+FSType=Default
+Icon=3floppy_mount
+MountPoint=/mnt/@MOUNT
+ReadOnly=true
+Type=FSDevice
+UnmountIcon=3floppy_unmount
+

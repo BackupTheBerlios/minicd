@@ -1,0 +1,9 @@
+[Desktop Entry]
+Dev=/dev/@DEVICE
+Encoding=UTF-8
+FSType=Default
+Icon=hdd_mount
+MountPoint=/mnt/@MOUNT
+ReadOnly=true
+Type=FSDevice
+UnmountIcon=hdd_unmount

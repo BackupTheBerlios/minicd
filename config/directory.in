@@ -1,0 +1,12 @@
+[Desktop Entry]
+BgImage=
+Icon=desktop
+Type=Directory
+
+[IconPosition::Home.desktop]
+X=5
+Y=5
+
+[IconPosition::Trash]
+X=5
+Y=55

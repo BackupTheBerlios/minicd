@@ -1,0 +1,15 @@
+[Desktop Action Eject]
+Exec=kdeeject %v
+Name=Eject
+
+[Desktop Entry]
+Actions=Eject
+Dev=/dev/@DEVICE
+Encoding=UTF-8
+FSType=Default
+Icon=cdrom_mount
+MountPoint=/mnt/@MOUNT
+ReadOnly=true
+Type=FSDevice
+UnmountIcon=cdrom_unmount
+

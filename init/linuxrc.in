@@ -1,0 +1,330 @@
+#!/initrd/bin/ash
+#
+# MiniCD startup (linuxrc) script
+# Copyright (C) 2002-2003, Jaco Greeff
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Changelog:
+#
+# * 07 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - Change echo "xyx... " to echo "xyz: " in "docmd" to
+#   ensure consistency across
+#
+# * 03 March 2003, Jaco Greeff <jaco@puxedo.org>
+# - Added bootsplash/console background display
+#
+# * 22 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Added the creation of rc.sysinit to cater for
+#   automatic hardware detection
+#
+# * 18 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Swapped from bash to the busybox ash, nice and small
+#
+# * 16 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Modularised code (eg. we have functions now)
+#
+# * 12 February 2003, Jaco Greeff <jaco@puxedo.org>
+# - Initial version
+# - Parts/Ideas taken from the KNOPPIX CD Bootup script,
+#   (C) Klaus Knopper <knoppix@knopper.net>
+#
+
+
+### global vars
+FOUND_MDKISO=""
+FOUND_SCSI=""
+CLOOPIMG="mdkimg.clp" # name of the cloop image
+DEVICES=""            # list of all ide/scsi cd-type devices
+FOUNDMEM=200000       # total memory found on box
+TOTALMEM=200000       # total usable memory on box
+MINSIZE=2000          # Minimum size of additional ram partitions
+MINLEFT=16000         # At least this much memory minus 30% should remain when home and var are full.
+MAXSIZE=1000000       # maximum ramdisk size
+RAMSIZE=1000000       # default ramdisk size
+MINRAMSIZE=15000      # the minimum ramdisk size
+KERNELVER="@KERNELVER"
+NAME_VERSION_STR="@NAME_VERSION_STR"
+CLOOPVER="@CLOOPVER"
+
+
+### screen colors
+RES_COL=65
+MOVE_TO_COL="echo -en \\033[${RES_COL}G\\033[K"
+SETCOLOR_OK="echo -en \\033[1;32m"
+SETCOLOR_FAIL="echo -en \\033[1;31m"
+SETCOLOR_WARN="echo -en \\033[1;33m"
+SETCOLOR_NORMAL="echo -en \\033[0;39m"
+SETCOLOR_CLEAR="echo -en \\033c"
+SETCOLOR_CEOL="echo -en \\033[0G\\033[K"
+
+
+### print a success msg
+printok() {
+	$MOVE_TO_COL
+	echo -n "[  "
+	$SETCOLOR_OK
+	echo -n "OK"
+	$SETCOLOR_NORMAL
+	echo "  ]"
+	return 0
+}
+
+
+### print a warning msg
+printwarn() {
+	$MOVE_TO_COL
+	echo -n "[ "
+	$SETCOLOR_WARN
+	echo -n "WARN"
+	$SETCOLOR_NORMAL
+	echo " ]"
+	return 0
+}
+
+
+### print a fialure msg
+printfail() {
+	$MOVE_TO_COL
+	echo -n "["
+	$SETCOLOR_FAIL
+	echo -n "FAILED"
+	$SETCOLOR_NORMAL
+	echo "]"
+	return 0
+}
+
+
+### execute a command/commands printing the sucess or failure msg on completion
+docmd() {
+	echo -n "$1: "
+	shift
+	CMD="$1"
+	shift
+	while [ $# -gt 0 ]; do
+		CMD="$CMD && $1"
+		shift
+	done
+	(eval "$CMD") 2>&1 >/dev/null && printok || printfail
+}
+
+
+### load a module
+loadmod() {
+	insmod /lib/modules/$KERNELVER/$1 2>&1 >/dev/null && return 0 || return 1
+}
+
+
+### show the welcome message
+printwelcome() {
+	### now print the welcome screen
+	$SETCOLOR_WARN
+	echo ""
+	echo "Welcome to the $NAME_VERSION_STR"
+	echo "Linux kernel $KERNELVER, Mandrake $CLOOPVER"
+	echo ""
+	$SETCOLOR_NORMAL
+}
+
+
+### initialise
+initialise() {
+	docmd "Mounting proc filesystem on /proc" \
+              "mkdir -p /proc" \
+              "mount -t proc none /proc"
+	docmd "Setting up kernel parameters" \
+              "echo '0' >/proc/sys/kernel/printk" \
+              "echo '/initrd/sbin/modprobe' >/proc/sys/kernel/modprobe" \
+              "exec >/dev/console </dev/console 2>&1"
+	if [ -e /proc/splash ]; then
+		echo -n "Setting framebuffer splash: "
+		for i in 0 1 2 3 4 5; do
+			/initrd/bin/bootsplash -s -u $i /initrd/etc/bootsplash/bootbg-800x600.cfg 2>&1 >/dev/null
+		done
+		printok
+	fi
+}
+
+
+### this is if we are to execute a limited shell
+execshell() {
+	export HOSTNAME="localhost.localdomain"
+	export PS1="[root@localhost \W]$ "
+	export PS2="> "
+	export PS4="+ "
+	echo "6" >/proc/sys/kernel/printk
+	exec /initrd/bin/ash
+}
+
+
+### find the cloop device
+findcloop() {
+	# ide devices + hdd's
+	DEVICES="/dev/hd?"
+	DEVICES="$DEVICES /dev/hd?[1-9] /dev/hd?[1-9][0-9]"
+	# scci devices + hdd's (usb should fit in here)
+	#if [ ! -z "$FOUND_SCSI" ]; then
+	#	DEVICES="/dev/scd? /dev/scd?? $DEVICES"
+	#	DEVICES="$DEVICES /dev/sd?[1-9] /dev/sd?[1-9][0-9]"
+	#fi
+	# parallel port devices
+	#DEVICES="$DEVICES /dev/pcd?"
+
+	# load basic modules
+	echo -n "Loading basic cdrom modules: "
+	ALL_LOADED=1
+	for i in zlib_inflate.o isofs.o cdrom.o ide-cd.o; do
+		loadmod $i || ALL_LOADED=0
+	done
+	[ $ALL_LOADED -gt 0 ] && printok || printfail
+
+	# do the loop
+	echo -n "Finding compressed loop image: "
+	for i in $DEVICES; do
+		$MOVE_TO_COL
+		$SETCOLOR_WARN
+		echo -n "$i"
+		$SETCOLOR_NORMAL
+		if `mount -o ro -t iso9660 $i /mnt/minicd >/dev/null 2>&1`; then
+			if [ -f /mnt/minicd/$CLOOPIMG ]; then
+				FOUND_MDKISO="$i"
+				printok
+				docmd "Mounting compressed image ($FOUND_MDKISO) on /mnt/mdkimg" \
+                                      "loadmod 'cloop.o file=/mnt/minicd/$CLOOPIMG'" \
+                                      "mount -o ro -t iso9660 /dev/cloop /mnt/mdkimg"
+				break
+			fi
+			`umount /mnt/minicd 2>&1 >/dev/null`
+		fi
+	done
+	if [ -z "$FOUND_MDKISO" ]; then
+		printfail
+		$SETCOLOR_FAIL
+		echo ""
+		echo "ERROR: Unable to find the compressed CD filesystem,"
+		echo "       dropping you to a limited busybox shell."
+		$SETCOLOR_NORMAL
+		execshell
+	fi
+}
+
+
+### create /mnt/ramdisk
+createramdisk() {
+	# create a basic root
+	docmd "Creating root filesystem" \
+              "rm -rf /lib" \
+              "ln -sf /mnt/mdkimg/bin" \
+              "ln -sf /mnt/mdkimg/lib" \
+              "ln -sf /mnt/mdkimg/sbin" \
+              "ln -sf /mnt/mdkimg/usr"
+	docmd "Setting environment" \
+              "cat /mnt/mdkimg/etc/ld.so.cache >/etc/ld.so.cache" \
+              "echo '6' >/proc/sys/kernel/printk" \
+              "echo '/sbin/modprobe' >/proc/sys/kernel/modprobe" \
+              "ln -sf /mnt/mdkimg/etc/alternatives /etc/"
+	export PATH=$PATH:/sbin:/usr/sbin:/bin:/usr/bin:/usr/X11R6/bin:/usr/local/bin:/usr/local/sbin
+
+	# how much memory do we have?
+	echo -n "Calculating usable memory"
+	FOUNDMEM="$(awk '/MemTotal/{print $2}' /proc/meminfo)"
+	TOTALMEM="$(awk 'BEGIN{m=0};/MemFree|Cached/{m+=$2};END{print m}' /proc/meminfo)"
+	MAXSIZE="$(expr $TOTALMEM - $MINLEFT)"
+	RAMSIZE="$(expr $TOTALMEM / 5)"
+	[ -z "$RAMSIZE" ] && RAMSIZE=$MINRAMSIZE
+	[ $RAMSIZE -lt $MINRAMSIZE ] && RAMSIZE=$MINRAMSIZE
+	#RAMSIZE=$(expr $RAMSIZE \* 4) # tmpfs/varsize version, can use swap
+	echo -n " (${RAMSIZE}/${TOTALMEM}/${FOUNDMEM}kB)"
+	printok
+
+	# Check for sufficient memory to mount extra ramdisk for /home + /var
+	if test -n "$TOTALMEM" -a "$TOTALMEM" -gt "$MINLEFT"; then
+		docmd "Creating /mnt/ramdisk (${RAMSIZE}/${FOUNDMEM}kB) on /dev/shm" \
+                      "mount -t tmpfs -o 'size=${RAMSIZE}k' /dev/shm /mnt/ramdisk" \
+                      "mkdir -p /mnt/ramdisk/tmp" \
+                      "cp -a /mnt/mdkimg/etc /mnt/ramdisk" \
+                      "rm -rf /mnt/ramdisk/etc/{issue,rc.d/{rc,rc.local,rc.sysinit}}" \
+                      "cp -a /initrd/etc/rc.d/* /mnt/ramdisk/etc/rc.d" \
+                      "mkdir -p /mnt/ramdisk/etc/hwdetect" \
+                      "cp -a /initrd/etc/hwdetect/* /mnt/ramdisk/etc/hwdetect" \
+                      "cp -a /mnt/mdkimg/home /mnt/ramdisk" \
+                      "cp -a /mnt/mdkimg/etc/skel /mnt/ramdisk && mv /mnt/ramdisk/skel /mnt/ramdisk/root" \
+                      "cp -a /mnt/mdkimg/var /mnt/ramdisk" \
+                      "rm -rf /etc" \
+                      "ln -sf /mnt/ramdisk/etc" \
+                      "ln -sf /mnt/ramdisk/home" \
+                      "ln -sf /mnt/ramdisk/root" \
+                      "ln -sf /mnt/ramdisk/var" \
+                      "ln -sf /mnt/ramdisk/tmp" \
+                      "chown -R 501.501 /mnt/ramdisk/home/user" \
+                      "ln -sf /mnt/mdkimg/bin /mnt/ramdisk" \
+                      "ln -sf /mnt/mdkimg/lib /mnt/ramdisk" \
+                      "ln -sf /mnt/mdkimg/sbin /mnt/ramdisk" \
+                      "ln -sf /mnt/mdkimg/usr /mnt/ramdisk"
+		if [ -e /proc/splash ]; then
+			cat /initrd/etc/issue >/mnt/ramdisk/etc/issue
+		else
+			cat /initrd/etc/issue-tux >/mnt/ramdisk/etc/issue
+		fi
+	else
+		$SETCOLOR_FAIL
+		echo ""
+		echo "ERROR: Insufficient memory to create ramdisk,"
+		echo "       dropping you to a limited busybox shell."
+		$SETCOLOR_NORMAL
+		execshell
+	fi
+}
+
+
+### mount devfs
+mountdevfs() {
+	docmd "Mounting dev filesystem on /dev" \
+              "mount -t devfs devfs /dev" \
+              "mount -t devpts devpts /dev/pts"
+}
+
+### init the actual mdk image
+gomdkinit() {
+	# Change root device to /dev/ram0
+	docmd "Changing root device to /dev/ram0" \
+              "echo '0x100' >/proc/sys/kernel/real-root-dev" \
+              "echo 'none       /proc  proc  defaults  0 0' >/etc/fstab" \
+              "echo '/dev/ram0  /      ext2  defaults  0 0' >>/etc/fstab"
+	docmd "Setting up fastboot sequence" \
+              "rm -rf /fastboot"  \
+              "touch /fastboot"
+	docmd "Setting up clean init" \
+              "rm -rf /linuxrc /initrd"
+	export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/X11R6/bin:/usr/local/bin:/usr/local/sbin
+
+	# exit this one and off we go!
+	echo ""
+	echo "Starting Mandrake init process"
+	read
+	exit 0
+}
+
+
+### main script entry point
+export PATH=/initrd/bin:/initrd/usr/bin:/initrd/sbin:/initrd/usr/sbin
+umask 022
+printwelcome  ""
+initialise    ""
+findcloop     ""
+createramdisk ""
+mountdevfs    ""
+gomdkinit     ""
+exit 0
