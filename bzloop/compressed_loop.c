@@ -1,5 +1,5 @@
 /*
- *  compressed_loop.c: Read-only compressed loop blockdevice
+ *  Read-only compressed loop blockdevice
  *  hacked up by Rusty in 1999, extended and maintained by Klaus Knopper
  *
  *  cloop file looks like:
@@ -12,13 +12,28 @@
  *
  *  Inspired by loop.c by Theodore Ts'o, 3/29/93.
  *
- * Copyright 1999-2001 by Paul `Rusty' Russell & Klaus Knopper.
- * Copyright 2003 by Jaco Greeff
- * Redistribution of this file is permitted under the GNU Public License.
+ * Copyright (C) 1999-2001, Paul `Rusty' Russell
+ * Copyright (C) 1999-2003, Klaus Knopper <knopper@knopper.net>
+ * Copyright (C) 2003,      Jaco Greeff <jaco@linuxminicd.org>
  *
- * CHANGES: (see CHANGELOG file)
+ *    This program is free software; you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation; either version 2 of the License, or
+ *    (at your option) any later version.
  *
- * $Id: compressed_loop.c,v 1.1 2003/09/25 09:19:33 jaco Exp $
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software
+ *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * CHANGELOG:
+ * (see CHANGELOG file)
+ *
+ * $Id: compressed_loop.c,v 1.2 2003/09/25 09:39:11 jaco Exp $
  */
 
 /* Define this if you are using Greenshoe Linux */

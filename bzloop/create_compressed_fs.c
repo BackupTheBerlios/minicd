@@ -1,5 +1,23 @@
-/* Creates a compressed image, given a file as an argument.
- * (c)1999 Paul `Rusty' Russell.  GPL.
+/*
+ * Creates a compressed image, given a file as an argument.
+ *
+ * Copyright (C) 1999-2001, Paul `Rusty' Russell
+ * Copyright (C) 1999-2003, Klaus Knopper <knopper@knopper.net>
+ * Copyright (C) 2003,      Jaco Greeff <jaco@linuxminicd.org>
+ *
+ *    This program is free software; you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation; either version 2 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software
+ *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * CHANGELOG:
  * * Wed Sep 24 2003 Jaco Greeff <jaco@linuxminicd.org>
@@ -12,7 +30,7 @@
  * * Sat Jul 28 2001 Klaus Knopper <knopper@knopper.net>
  * - cleanup and gcc 2.96 / glibc checking
  *
- * $Id: create_compressed_fs.c,v 1.1 2003/09/25 09:19:34 jaco Exp $
+ * $Id: create_compressed_fs.c,v 1.2 2003/09/25 09:39:11 jaco Exp $
  */
 
 #include <stdio.h>
