@@ -1,0 +1,8 @@
+Package: cloop-src
+Architecture: all
+Depends: zlib1g-dev
+Recommends: kernel-package
+Description: Source of the compressed loopback device module
+ This package contains a source package for building the the cloop module.
+ You can use make-kpkg to build a modules package for specific kernel.
+

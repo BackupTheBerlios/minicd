@@ -1,0 +1,7 @@
+Source: cloop
+Section: misc
+Priority: optional
+Maintainer: Klaus Knopper <cloop@knopper.net>
+Build-Depends: debhelper (>> 3.0.0), zlib1g-dev
+Standards-Version: 3.5.2
+

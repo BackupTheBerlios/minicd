@@ -1,0 +1,15 @@
+#!/bin/sh -e
+# source debconf library
+#export DEBCONF_DEBUG=developer
+. /usr/share/debconf/confmodule
+
+if [ "$1" = "configure" ] ; then
+   db_get cloop/createdevs || true
+   if [ "$RET" = "true" ] ; then
+      if test ! -e /dev/cloop; then
+         mknod /dev/cloop b 240 0 || true
+      fi
+   fi
+fi
+
+#DEBHELPER#

@@ -1,0 +1,71 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.1//EN">
+<refentry id="compressloop">
+
+<refmeta>
+	<refentrytitle>compressloop</refentrytitle>
+	<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+	<refname>compressloop</refname>
+	<refpurpose>create a compressed cloop volume</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+	<cmdsynopsis>
+		<command>compressloop</command>
+		<arg choice="opt">options</arg>
+		<arg choice="req">infile</arg>
+		<arg choice="req">outfile</arg>
+	</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1>
+	<title>DESCRIPTION</title>
+
+  <para><command>compressloop</command> compresses a filesystem image
+  to a compressed image suitable for mounting with the cloop driver. blocksize
+  must be a multiple of 512  bytes. This is a complete rewrite of create_compressed_fs
+  which does not need as much swap to hold the entire compressed image in virtual memory,
+  but also does not work in pipe mode anymore (i.e. you need real files as input and output).
+  </para>
+
+  <para>You can specify the compression level, so it's possible to create a                                    
+  larger but faster image.</para>
+                                                                                                                
+  <para>Please note that due to the lseek() calls, it is no longer possible to use
+  stdout as output file. Those who want to use images to pipe them to a CD
+  burner will still need the old create_compressed_fs utility.</para>
+
+</refsect1>
+
+<refsect1>
+  <title>MOUNTING</title>
+  <para>You have to pass the options to the cloop module on loading:</para>
+
+  <para>insmod cloop.o file=/path/to/compressed/image</para>
+  <para>mount -o ro -t whatever /dev/cloop /mnt/compressed</para>
+</refsect1>
+
+	<title>SEE ALSO</title>
+
+	<command>/usr/share/doc/cloop-utils/*</command>, <command>/usr/share/doc/cloop-src/*</command>
+        <address>http://projects.openoffice.nl/downloads/compressloop/</address> 
+
+</refsect1>
+
+<refsect1>
+    <title>AUTHOR</title>
+    <para>Author of <command>compressloop</command>: Valentijn Sessink <email>(valentyn+knoppix@nospam.openoffice.nl)</email>
+
+    <para>This manual page was written by Klaus Knopper
+    <email>(knoppix@knopper.net)</email> for the <productname>Debian
+    GNU/Linux</productname> system (but may be used by others).  Permission is
+    granted to copy, distribute and/or modify this document under the terms of
+    the <acronym>GNU</acronym> Free Documentation License, Version 1.1
+    published by the Free Software Foundation; with no Invariant
+    Sections, no Front-Cover Texts and no Back-Cover Texts.</para>
+
+</refsect1>
+
+</refentry>

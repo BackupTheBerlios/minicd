@@ -1,0 +1,43 @@
+cloop for Debian
+----------------
+
+What is cloop? It is a simple way to compress a real filesystem and mount it
+per loopback, so you can access all the data on-the-fly.
+
+Before starting, you will need to build the filesystem module and load it into
+the running kernel. Please read the create_compressed_fs(1) manpage about how
+to create a compressed filesystem volume and how to mount it.  I recommend to
+build proper Debian modules while compiling a new kernel, or install the
+kernel-headers-2.4.x-Y package for your kernel and continue as described below.
+
+To build the cloop modules package you better use make-kpkg. To install,
+extract the tarbal in /usr/src, and create the modules package with make-kpkg.
+Then install with dpkg.
+
+$ cd /usr/src
+$ tar zxvf cloop.tar.gz
+
+If you have kernel source for your kernel installed, then do:
+
+$ cd /usr/src/kernel-source-2.4.X
+$ make-kpkg modules_image
+$ ls -ltra ..
+$ dpkg -i ../<NEW CREATED PACKAGE>
+
+If the source is not installed, and wish to go with the kernel-headers package,
+then do:
+
+$ apt-get install debhelper make gcc kernel-headers-VERSION
+ where VERSION must match exactly the version of your kernel, ie. 2.4.16-k7
+$ cd /usr/src/modules/cloop
+$ debian/binary KSRC=/usr/src/kernel-headers-VERSION KVERS=VERSION kdist_image
+$ dpkg -i /usr/src/<NEW CREATED PACKAGE>
+
+If you are a Debian maintainer and going to package official modules package,
+use another command line:
+
+$ debian/binary kdist KSRC=/usr/src/kernel-headers-VERSION KVERS=VERSION KDREV=2.4.xy-1
+
+Also set KEMAIL, KMAINT and/or DEBFULLNAME and GNUPGHOME as necessary.
+
+ -- Eduard Bloch <blade@debian.org>  Mon,  3 Dec 2001 22:22:28 +0100

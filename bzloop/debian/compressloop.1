@@ -1,0 +1,92 @@
+.\" This -*- nroff -*- file has been generated from
+.\" DocBook SGML with docbook-to-man on Debian GNU/Linux.
+...\"
+...\"	transcript compatibility for postscript use.
+...\"
+...\"	synopsis:  .P! <file.ps>
+...\"
+.de P!
+\\&.
+.fl			\" force out current output buffer
+\\!%PB
+\\!/showpage{}def
+...\" the following is from Ken Flowers -- it prevents dictionary overflows
+\\!/tempdict 200 dict def tempdict begin
+.fl			\" prolog
+.sy cat \\$1\" bring in postscript file
+...\" the following line matches the tempdict above
+\\!end % tempdict %
+\\!PE
+\\!.
+.sp \\$2u	\" move below the image
+..
+.de pF
+.ie     \\*(f1 .ds f1 \\n(.f
+.el .ie \\*(f2 .ds f2 \\n(.f
+.el .ie \\*(f3 .ds f3 \\n(.f
+.el .ie \\*(f4 .ds f4 \\n(.f
+.el .tm ? font overflow
+.ft \\$1
+..
+.de fP
+.ie     !\\*(f4 \{\
+.	ft \\*(f4
+.	ds f4\"
+'	br \}
+.el .ie !\\*(f3 \{\
+.	ft \\*(f3
+.	ds f3\"
+'	br \}
+.el .ie !\\*(f2 \{\
+.	ft \\*(f2
+.	ds f2\"
+'	br \}
+.el .ie !\\*(f1 \{\
+.	ft \\*(f1
+.	ds f1\"
+'	br \}
+.el .tm ? font underflow
+..
+.ds f1\"
+.ds f2\"
+.ds f3\"
+.ds f4\"
+'\" t 
+.ta 8n 16n 24n 32n 40n 48n 56n 64n 72n  
+.TH "create_compressed_fs" "1" 
+.SH "NAME" 
+create_compressed_fs, extract_compressed_fs \(em convert and extract a filesystem to/from a cloop volume 
+.SH "SYNOPSIS" 
+.PP 
+\fBcreate_compressed_fs\fP image blocksize  [> image.cloop_compressed]  
+.PP 
+\fBextract_compressed_fs\fP filename  
+.SH "DESCRIPTION" 
+.PP 
+\fBcreate_compressed_fs\fP compresses a filesystem image 
+to a compressed image suitable for mounting with the cloop driver. blocksize 
+must be a multiple of 512  bytes. Make sure you have enough swap to hold the 
+entire compressed image in virtual memory! Use "-" as filename to read data 
+from stdin, as in:  
+.PP 
+mkisofs -r datadir | create_compressed_fs - 65536 > datadir.iso.compressed 
+ 
+.SH "MOUNTING" 
+.PP 
+You have to pass the options to the cloop module on loading: 
+.PP 
+insmod cloop.o file=/path/to/compressed/image 
+.PP 
+mount -o ro -t whatever /dev/cloop /mnt/compressed 
+.SH "SEE ALSO" 
+\fB/usr/share/doc/cloop-utils/*\fP, \fB/usr/share/doc/cloop-src/*\fP 
+.SH "AUTHOR" 
+.PP 
+This manual page was written by Eduard Bloch 
+(blade@debian.org) for the \fBDebian 
+GNU/Linux\fP system (but may be used by others).  Permission is 
+granted to copy, distribute and/or modify this document under the terms of 
+the GNU Free Documentation License, Version 1.1 or any 
+later version published by the Free Software Foundation; with no Invariant 
+Sections, no Front-Cover Texts and no Back-Cover Texts. 
+...\" created by instant / docbook-to-man, Tue 18 Dec 2001, 00:07 

@@ -1,0 +1,69 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.1//EN">
+<refentry id="create_compressed_fs">
+
+<refmeta>
+	<refentrytitle>create_compressed_fs</refentrytitle>
+	<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+	<refname>create_compressed_fs, extract_compressed_fs</refname>
+	<refpurpose>convert and extract a filesystem to/from a cloop volume</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+	<cmdsynopsis>
+		<command>create_compressed_fs</command>
+		<arg choice="req"> image</arg>
+		<arg choice="req">blocksize</arg>
+		<arg choice="opt">> image.cloop_compressed</arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+		<command>extract_compressed_fs</command>
+		<arg choice="req"> filename</arg>
+	</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1>
+	<title>DESCRIPTION</title>
+
+  <para><command>create_compressed_fs</command> compresses a filesystem image
+  to a compressed image suitable for mounting with the cloop driver. blocksize
+  must be a multiple of 512  bytes. Make sure you have enough swap to hold the
+  entire compressed image in virtual memory! Use "-" as filename to read data
+  from stdin, as in: </para>
+
+  <para>
+  mkisofs -r datadir | create_compressed_fs - 65536 > datadir.iso.compressed
+  </para>
+
+</refsect1>
+
+<refsect1>
+  <title>MOUNTING</title>
+  <para>You have to pass the options to the cloop module on loading:</para>
+
+  <para>insmod cloop.o file=/path/to/compressed/image</para>
+  <para>mount -o ro -t whatever /dev/cloop /mnt/compressed</para>
+</refsect1>
+
+	<title>SEE ALSO</title>
+
+	<command>/usr/share/doc/cloop-utils/*</command>, <command>/usr/share/doc/cloop-src/*</command>
+
+</refsect1>
+
+<refsect1>
+    <title>AUTHOR</title>
+
+    <para>This manual page was written by Eduard Bloch
+    <email>(blade@debian.org)</email> for the <productname>Debian
+    GNU/Linux</productname> system (but may be used by others).  Permission is
+    granted to copy, distribute and/or modify this document under the terms of
+    the <acronym>GNU</acronym> Free Documentation License, Version 1.1 or any
+    later version published by the Free Software Foundation; with no Invariant
+    Sections, no Front-Cover Texts and no Back-Cover Texts.</para>
+
+</refsect1>
+
+</refentry>

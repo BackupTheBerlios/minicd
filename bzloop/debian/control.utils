@@ -1,0 +1,7 @@
+Package: cloop-utils
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Tools for handling with cloop compressed volumes
+ Utilities for creating and unpacking compressed loopback files
+ for cloop.
+
